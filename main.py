@@ -5,6 +5,8 @@ from pydantic import BaseModel
 # --- IMPORTACIONES MÁGICAS (Solución al NameError) ---
 from services.reportes import router as reportes_router
 from services.reservas import router as reservas_router
+from services.horarios import router as horarios_router
+from services.acceso import router as acceso_router
 
 app = FastAPI(title="S.A.R.A. Backend")
 
@@ -30,6 +32,8 @@ class LoginRequest(BaseModel):
 # --- CONEXIÓN DE LOS MÓDULOS ---
 app.include_router(reportes_router, prefix="/api/reportes", tags=["Reportes"])
 app.include_router(reservas_router, prefix="/api/calendario", tags=["Calendario"])
+app.include_router(horarios_router, prefix="/api/horarios", tags=["Horarios"])
+app.include_router(acceso_router, prefix="/api/accesos", tags=["Accesos"])
 
 @app.get("/")
 def ruta_principal():
