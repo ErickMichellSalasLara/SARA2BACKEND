@@ -11,6 +11,7 @@ app = FastAPI(title="S.A.R.A. Backend")
 origenes_permitidos = [
     "http://localhost:5173",
     "http://127.0.0.1:3000",
+    "https://sara2-production.up.railway.app"
 ]
 
 app.add_middleware(
