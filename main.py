@@ -42,7 +42,8 @@ def login(request: LoginRequest):
         return {
             "token": "token_simulado_12345_sara",
             "user": {
-                "name": "Administrador Principal"
+                "name": "Administrador Principal",
+                "role": "admin"
             }
         }
 
