@@ -1,23 +1,34 @@
 # Estadísticas
-from fastapi import APIRouter
-from schemas.dto import MetricasDashboard
+#Librerias de panda
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+import pandas as pd
+import io
 
-# Creamos un "Router" para agrupar todas las rutas relacionadas al dashboard
-router = APIRouter(
-    prefix="/api/dashboard",
-    tags=["Dashboard Administrativo"]
-)
+router = APIRouter()
 
-@router.get("/metricas", response_model=MetricasDashboard)
-def obtener_metricas_mock():
-    # Retornamos los datos falsos simulando una base de datos real
-    return {
-        "usuarios_dentro": 128,
-        "accesos_hoy": 387,
-        "cubiculos_ocupados": 8,
-        "cubiculos_totales": 12,
-        "prestamos_activos": 43,
-        "prestamos_vencidos": 5,
-        "ocupacion_porcentaje": 67,
-        "afluencia_grafica": [10, 30, 80, 120, 95, 150, 110]
-    }
+@router.get("/reservas/excel")
+def descargar_reporte_excel():
+    try:
+        datos_reporte = [
+            {"ID": 1, "Usuario": "Ana López", "Cubículo": "Cubículo 01", "Fecha": "2026-08-01", "Estado": "Ocupado"},
+            {"ID": 2, "Usuario": "Carlos Ruiz", "Cubículo": "Cubículo 02", "Fecha": "2026-08-01", "Estado": "Reservado"},
+            {"ID": 3, "Usuario": "Mantenimiento", "Cubículo": "Cubículo 04", "Fecha": "2026-08-01", "Estado": "Mantenimiento"},
+            {"ID": 4, "Usuario": "Luis Pérez", "Cubículo": "Cubículo 03", "Fecha": "2026-08-02", "Estado": "Reservado"}
+        ]
+
+        df = pd.DataFrame(datos_reporte)
+        stream = io.BytesIO()
+        with pd.ExcelWriter(stream, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Reservas_SARA")
+
+        stream.seek(0)
+        headers = {'Content-Disposition': 'attachment; filename="Reporte_Reservas_SARA.xlsx"'}
+
+        return StreamingResponse(
+            stream,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando el reporte: {str(e)}")
