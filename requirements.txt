@@ -9,6 +9,7 @@ colorama==0.4.6
 cryptography==50.0.0
 et_xmlfile==2.0.0
 fastapi==0.141.1
+fpdf==1.7.2
 google-api-core==2.33.0
 google-api-python-client==2.198.0
 google-auth==2.56.2
