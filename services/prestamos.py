@@ -1,46 +1,40 @@
-# Libros
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
 
 router = APIRouter()
 
-# Esquema para recibir los datos desde el frontend
-class SolicitudPrestamo(BaseModel):
-    matricula: str
-    material: str
+class NuevoPrestamo(BaseModel):
+    user_id: int
+    material_id: int
+    due_date: str
 
-# Datos simulados (mock data)
-registro_prestamos = [
-    {"id": 1, "matricula": "210345", "nombre": "Laura Martínez", "material": "Libro 1", "hora_prestamo": "08:15", "hora_devolucion": None, "estatus": "Activo"},
-    {"id": 2, "matricula": "220112", "nombre": "Sofía Castro", "material": "Libro 2", "hora_prestamo": "10:00", "hora_devolucion": "11:00", "estatus": "Devuelto"},
-]
-
-@router.get("/historial")
-def obtener_prestamos():
-    return {"prestamos": registro_prestamos}
+@router.get("/activos")
+async def obtener_prestamos(db: Session = Depends(get_db)):
+    try:
+        query = text("SELECT * FROM vw_loans_effective ORDER BY due_date ASC")
+        resultado = db.execute(query).mappings().all()
+        return {"prestamos": resultado}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/registrar")
-def registrar_prestamo(datos: SolicitudPrestamo):
-    nuevo_prestamo = {
-        "id": len(registro_prestamos) + 1,
-        "matricula": datos.matricula,
-        "nombre": "Estudiante Prueba", # Esto lo sacaremos de SQLite después
-        "material": datos.material,
-        "hora_prestamo": datetime.now().strftime("%H:%M"),
-        "hora_devolucion": None,
-        "estatus": "Activo"
-    }
-    registro_prestamos.append(nuevo_prestamo)
-    return {"mensaje": f"Préstamo de '{datos.material}' registrado exitosamente", "datos": nuevo_prestamo}
-
-@router.put("/devolver/{prestamo_id}")
-def devolver_prestamo(prestamo_id: int):
-    # Buscamos el préstamo por su ID para registrar la devolución
-    for prestamo in registro_prestamos:
-        if prestamo["id"] == prestamo_id and prestamo["estatus"] == "Activo":
-            prestamo["hora_devolucion"] = datetime.now().strftime("%H:%M")
-            prestamo["estatus"] = "Devuelto"
-            return {"mensaje": "Material devuelto correctamente", "datos": prestamo}
-
-    return {"mensaje": "Préstamo no encontrado o ya devuelto"}
+async def registrar_prestamo(prestamo: NuevoPrestamo, db: Session = Depends(get_db)):
+    try:
+        # Ejemplo de cómo insertar un nuevo préstamo en la BD real
+        query = text("""
+                     INSERT INTO loans (user_id, material_id, loan_date, due_date, registered_by)
+                     VALUES (:user_id, :material_id, CURDATE(), :due_date, 1)
+                     """)
+        db.execute(query, {
+            "user_id": prestamo.user_id,
+            "material_id": prestamo.material_id,
+            "due_date": prestamo.due_date
+        })
+        db.commit()
+        return {"mensaje": "Préstamo registrado correctamente en la base de datos"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

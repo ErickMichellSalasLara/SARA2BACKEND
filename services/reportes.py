@@ -1,75 +1,103 @@
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
-import io
-import csv
-from openpyxl import Workbook
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
+import openpyxl
 from fpdf import FPDF
+import csv
+import os
 
 router = APIRouter()
 
-@router.get("/{modulo}/{formato}")
-async def descargar_reporte(
-        modulo: str,
-        formato: str,
-        inicio: str = Query(None),
-        fin: str = Query(None)
-):
-    # --- LÓGICA PARA CSV ---
-    if formato == "csv":
-        output = io.StringIO()
-        writer = csv.writer(output)
+# ---------------------------------------------------------
+# 1. Exportar a CSV
+# ---------------------------------------------------------
+@router.get("/exportar/csv")
+async def exportar_csv(db: Session = Depends(get_db)):
+    try:
+        query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
+        registros = db.execute(query).mappings().all()
 
-        writer.writerow(["Modulo", "Fecha Inicio", "Fecha Fin", "Estado"])
-        writer.writerow([modulo, inicio, fin, "Generado correctamente"])
+        file_path = "reporte_auditoria.csv"
 
-        output.seek(0)
+        # Abrimos el archivo en modo escritura ('w')
+        with open(file_path, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
 
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=reporte_{modulo}.csv"}
-        )
+            # Escribimos los encabezados de las columnas
+            writer.writerow(["ID", "Administrador", "Acción", "Módulo", "Registro", "Fecha"])
 
-    # --- LÓGICA PARA EXCEL ---
-    elif formato == "excel":
-        output = io.BytesIO() # Usamos BytesIO porque Excel es un archivo binario
-        wb = Workbook()
+            # Escribimos fila por fila
+            for reg in registros:
+                writer.writerow([
+                    reg["id"],
+                    reg["administrator"],
+                    reg["action"],
+                    reg["module"],
+                    reg["record_label"],
+                    str(reg["occurred_at"])
+                ])
+
+        return FileResponse(file_path, filename="Reporte_SARA.csv")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ---------------------------------------------------------
+# 2. Exportar a Excel
+# ---------------------------------------------------------
+@router.get("/exportar/excel")
+async def exportar_excel(db: Session = Depends(get_db)):
+    try:
+        query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
+        registros = db.execute(query).mappings().all()
+
+        wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = f"Reporte {modulo.capitalize()}"
+        ws.title = "Reporte SARA"
 
-        # Agregamos encabezados y datos (luego aquí meterás los datos de tu BD)
-        ws.append(["Modulo", "Fecha Inicio", "Fecha Fin", "Estado"])
-        ws.append([modulo, inicio, fin, "Generado correctamente"])
+        ws.append(["ID", "Administrador", "Acción", "Módulo", "Registro", "Fecha"])
 
-        wb.save(output)
-        output.seek(0)
+        for reg in registros:
+            ws.append([
+                reg["id"],
+                reg["administrator"],
+                reg["action"],
+                reg["module"],
+                reg["record_label"],
+                str(reg["occurred_at"])
+            ])
 
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename=reporte_{modulo}.xlsx"}
-        )
+        file_path = "reporte_auditoria.xlsx"
+        wb.save(file_path)
+        return FileResponse(file_path, filename="Reporte_SARA.xlsx")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # --- LÓGICA PARA PDF ---
-    elif formato == "pdf":
+# ---------------------------------------------------------
+# 3. Exportar a PDF
+# ---------------------------------------------------------
+@router.get("/exportar/pdf")
+async def exportar_pdf(db: Session = Depends(get_db)):
+    try:
+        # Para el PDF limitamos a 50 registros para que no sea un documento infinito
+        query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC LIMIT 50")
+        registros = db.execute(query).mappings().all()
+
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", size=12)
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, "S.A.R.A. - Reporte de Auditoría", ln=True, align="C")
 
-        # Agregamos texto al PDF
-        pdf.cell(200, 10, txt=f"S.A.R.A - Reporte de {modulo.capitalize()}", ln=True, align='C')
-        pdf.cell(200, 10, txt=f"Periodo: {inicio} al {fin}", ln=True, align='C')
-        pdf.cell(200, 10, txt="Estado: Generado correctamente", ln=True, align='C')
+        pdf.set_font("Arial", size=10)
+        pdf.ln(10)
 
-        # Guardamos el PDF en memoria (FPDF lo saca como string, lo pasamos a bytes)
-        pdf_bytes = pdf.output(dest='S').encode('latin1')
-        output = io.BytesIO(pdf_bytes)
+        for reg in registros:
+            texto = f"[{reg['occurred_at']}] {reg['administrator']} -> {reg['action']} en {reg['module']}"
+            pdf.cell(0, 10, texto, ln=True)
 
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=reporte_{modulo}.pdf"}
-        )
-
-    else:
-        raise HTTPException(status_code=400, detail="Formato no soportado")
+        file_path = "reporte_auditoria.pdf"
+        pdf.output(file_path)
+        return FileResponse(file_path, filename="Reporte_SARA.pdf")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

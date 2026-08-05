@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
 
 router = APIRouter()
 
@@ -9,51 +11,35 @@ class AuditoriaCreate(BaseModel):
     action: str
     module: str
     record: str
-    date: str
-
-# --- SIMULADOR DE BASE DE DATOS ---
-# Empezamos con unos registros de prueba para que tu tabla no esté vacía
-base_de_datos_auditoria = [
-    {
-        "id": 1,
-        "admin": "Sistema S.A.R.A.",
-        "action": "Inicialización del sistema",
-        "module": "Configuración",
-        "record": "Arranque",
-        "date": "2026-08-01 08:00",
-        "ip": "127.0.0.1",
-    }
-]
-contador_id = 2
 
 @router.get("/historial")
-async def obtener_historial():
+async def obtener_historial(db: Session = Depends(get_db)):
     try:
-        # Devolvemos la lista invertida para que los eventos recientes salgan primero
-        return {"auditoria": list(reversed(base_de_datos_auditoria))}
+        # Consultamos la base de datos real usando la vista preparada
+        query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
+        resultado = db.execute(query).mappings().all()
+        return {"auditoria": resultado}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/registrar")
-async def registrar_auditoria(auditoria: AuditoriaCreate):
-    global contador_id
+async def registrar_auditoria(auditoria: AuditoriaCreate, db: Session = Depends(get_db)):
     try:
-        nuevo_registro = {
-            "id": contador_id,
-            "admin": auditoria.admin,
+        # Insertamos el nuevo registro en la base de datos real
+        query = text("""
+                     INSERT INTO audit_logs (actor_user_id, action, module, record_label, ip_address)
+                     VALUES (:actor, :action, :module, :record, :ip)
+                     """)
+        # Nota: Ponemos actor_user_id = 1 (Admin demo) de forma temporal hasta que conectes el login real
+        db.execute(query, {
+            "actor": 1,
             "action": auditoria.action,
             "module": auditoria.module,
             "record": auditoria.record,
-            # Formateamos la hora actual para que se vea bien en tu tabla
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "ip": "127.0.0.1" # En el futuro, aquí puedes capturar la IP real del request
-        }
-
-        # Lo guardamos en nuestra "base de datos"
-        base_de_datos_auditoria.append(nuevo_registro)
-        contador_id += 1
-
-        print(f"✅ Guardado en tabla: {auditoria.admin} -> {auditoria.action}")
-        return {"mensaje": "Registro exitoso"}
+            "ip": "127.0.0.1"
+        })
+        db.commit()
+        return {"mensaje": "Registro exitoso en base de datos"}
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,5 +1,7 @@
-# Cubículos
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import httpx
@@ -11,6 +13,9 @@ router = APIRouter()
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CALENDAR_ID = 'c_0897fb421b1c7095121077b97e2bba9b8aa9c5d1b4775f68493ffa5d2bfea268@group.calendar.google.com'
 
+# ---------------------------------------------------------
+# 1. APIs Externas (Google Calendar y Nager.Date)
+# ---------------------------------------------------------
 @router.get("/dias-festivos")
 async def obtener_dias_festivos(anio: int = 2026):
     url_api_externa = f"https://date.nager.at/api/v3/PublicHolidays/{anio}/MX"
@@ -46,3 +51,34 @@ def obtener_reservas():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error conectando con Google Calendar: {str(e)}")
+
+
+# ---------------------------------------------------------
+# 2. Base de Datos SQL (S.A.R.A.)
+# ---------------------------------------------------------
+@router.get("/estado-cubiculos")
+async def obtener_estado_cubiculos(db: Session = Depends(get_db)):
+    """
+    Lee la vista preparada de la base de datos para ver qué cubículos
+    están disponibles, ocupados o en mantenimiento.
+    """
+    try:
+        query = text("SELECT * FROM vw_cubicle_status")
+        resultado = db.execute(query).mappings().all()
+        return {"cubiculos": resultado}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/historial-bd")
+async def obtener_historial_bd(db: Session = Depends(get_db)):
+    """
+    Obtiene el registro interno de reservas guardado en SQL,
+    útil para reportes y auditoría que Google Calendar no cubre.
+    """
+    try:
+        # Consultamos la tabla de reservas principal ordenando por las más recientes
+        query = text("SELECT * FROM reservations ORDER BY reservation_date DESC, start_time DESC")
+        resultado = db.execute(query).mappings().all()
+        return {"reservas_bd": resultado}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
