@@ -1,34 +1,75 @@
-# Estadísticas
-#Librerias de panda
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-import pandas as pd
 import io
+import csv
+from openpyxl import Workbook
+from fpdf import FPDF
 
 router = APIRouter()
 
-@router.get("/reservas/excel")
-def descargar_reporte_excel():
-    try:
-        datos_reporte = [
-            {"ID": 1, "Usuario": "Ana López", "Cubículo": "Cubículo 01", "Fecha": "2026-08-01", "Estado": "Ocupado"},
-            {"ID": 2, "Usuario": "Carlos Ruiz", "Cubículo": "Cubículo 02", "Fecha": "2026-08-01", "Estado": "Reservado"},
-            {"ID": 3, "Usuario": "Mantenimiento", "Cubículo": "Cubículo 04", "Fecha": "2026-08-01", "Estado": "Mantenimiento"},
-            {"ID": 4, "Usuario": "Luis Pérez", "Cubículo": "Cubículo 03", "Fecha": "2026-08-02", "Estado": "Reservado"}
-        ]
+@router.get("/{modulo}/{formato}")
+async def descargar_reporte(
+        modulo: str,
+        formato: str,
+        inicio: str = Query(None),
+        fin: str = Query(None)
+):
+    # --- LÓGICA PARA CSV ---
+    if formato == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
 
-        df = pd.DataFrame(datos_reporte)
-        stream = io.BytesIO()
-        with pd.ExcelWriter(stream, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="Reservas_SARA")
+        writer.writerow(["Modulo", "Fecha Inicio", "Fecha Fin", "Estado"])
+        writer.writerow([modulo, inicio, fin, "Generado correctamente"])
 
-        stream.seek(0)
-        headers = {'Content-Disposition': 'attachment; filename="Reporte_Reservas_SARA.xlsx"'}
+        output.seek(0)
 
         return StreamingResponse(
-            stream,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=reporte_{modulo}.csv"}
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generando el reporte: {str(e)}")
+
+    # --- LÓGICA PARA EXCEL ---
+    elif formato == "excel":
+        output = io.BytesIO() # Usamos BytesIO porque Excel es un archivo binario
+        wb = Workbook()
+        ws = wb.active
+        ws.title = f"Reporte {modulo.capitalize()}"
+
+        # Agregamos encabezados y datos (luego aquí meterás los datos de tu BD)
+        ws.append(["Modulo", "Fecha Inicio", "Fecha Fin", "Estado"])
+        ws.append([modulo, inicio, fin, "Generado correctamente"])
+
+        wb.save(output)
+        output.seek(0)
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=reporte_{modulo}.xlsx"}
+        )
+
+    # --- LÓGICA PARA PDF ---
+    elif formato == "pdf":
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+
+        # Agregamos texto al PDF
+        pdf.cell(200, 10, txt=f"S.A.R.A - Reporte de {modulo.capitalize()}", ln=True, align='C')
+        pdf.cell(200, 10, txt=f"Periodo: {inicio} al {fin}", ln=True, align='C')
+        pdf.cell(200, 10, txt="Estado: Generado correctamente", ln=True, align='C')
+
+        # Guardamos el PDF en memoria (FPDF lo saca como string, lo pasamos a bytes)
+        pdf_bytes = pdf.output(dest='S').encode('latin1')
+        output = io.BytesIO(pdf_bytes)
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=reporte_{modulo}.pdf"}
+        )
+
+    else:
+        raise HTTPException(status_code=400, detail="Formato no soportado")

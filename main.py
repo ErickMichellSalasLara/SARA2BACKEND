@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from services.prestamos import router as prestamos_router
+from services.auditoria import router as auditoria_router
 
 # --- IMPORTACIONES MÁGICAS (Solución al NameError) ---
 from services.reportes import router as reportes_router
 from services.reservas import router as reservas_router
-from services.horarios import router as horarios_router
 from services.acceso import router as acceso_router
 
 app = FastAPI(title="S.A.R.A. Backend")
@@ -32,8 +33,9 @@ class LoginRequest(BaseModel):
 # --- CONEXIÓN DE LOS MÓDULOS ---
 app.include_router(reportes_router, prefix="/api/reportes", tags=["Reportes"])
 app.include_router(reservas_router, prefix="/api/calendario", tags=["Calendario"])
-app.include_router(horarios_router, prefix="/api/horarios", tags=["Horarios"])
 app.include_router(acceso_router, prefix="/api/accesos", tags=["Accesos"])
+app.include_router(prestamos_router, prefix="/api/prestamos", tags=["Prestamos"])
+app.include_router(auditoria_router, prefix="/api/auditoria", tags=["Auditoria"])
 
 @app.get("/")
 def ruta_principal():
