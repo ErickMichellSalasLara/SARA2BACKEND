@@ -24,7 +24,6 @@ if ENVIRONMENT == "production" and JWT_SECRET == _DEFAULT_JWT_SECRET:
 CORS_ORIGINS = _split_csv(
     os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
-        "https://sara3-production.up.railway.app"
+        "http://localhost:5173,http://127.0.0.1:5173, https://sara3-production.up.railway.app",
     )
 )
