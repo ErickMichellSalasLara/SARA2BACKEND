@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-
 from core.config import APP_NAME, CORS_ORIGINS
 from database import engine
 from routers import (
