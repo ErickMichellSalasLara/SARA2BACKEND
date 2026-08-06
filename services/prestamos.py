@@ -45,7 +45,7 @@ def devolver_prestamo(loan_id: int, db: Session = Depends(get_db)):
 # ---------------------------------------------------------
 # JOIN (Obtener préstamos activos uniendo con Usuarios)
 # ---------------------------------------------------------
-@router.get("/activos")
+@router.get("/historial")
 def obtener_prestamos_activos(db: Session = Depends(get_db)):
     query = text("""
                  SELECT u.full_name, u.enrollment, m.title AS resource, l.id, l.loan_date, l.due_date, l.status

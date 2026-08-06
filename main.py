@@ -11,6 +11,8 @@ from sqlalchemy import text
 from services.reportes import router as reportes_router
 from services.reservas import router as reservas_router
 from services.acceso import router as acceso_router
+from services.usuarios import router as usuarios_router
+from services.dashboard import router as dashboard_router
 
 app = FastAPI(title="S.A.R.A. Backend")
 
@@ -39,6 +41,8 @@ app.include_router(reservas_router, prefix="/api/calendario", tags=["Calendario"
 app.include_router(acceso_router, prefix="/api/accesos", tags=["Accesos"])
 app.include_router(prestamos_router, prefix="/api/prestamos", tags=["Prestamos"])
 app.include_router(auditoria_router, prefix="/api/auditoria", tags=["Auditoria"])
+app.include_router(usuarios_router, prefix="/api/usuarios", tags=["Usuarios"])
+app.include_router(dashboard_router, prefix="/api/dashboard", tags=["Dashboard"])
 
 @app.get("/")
 def ruta_principal():
