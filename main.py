@@ -5,6 +5,7 @@ from services.prestamos import router as prestamos_router
 from services.auditoria import router as auditoria_router
 from database import get_db
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 # --- IMPORTACIONES MÁGICAS (Solución al NameError) ---
 from services.reportes import router as reportes_router
