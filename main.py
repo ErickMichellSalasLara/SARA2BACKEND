@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from services.prestamos import router as prestamos_router
 from services.auditoria import router as auditoria_router
 from database import get_db
+from sqlalchemy.orm import Session
 
 # --- IMPORTACIONES MÁGICAS (Solución al NameError) ---
 from services.reportes import router as reportes_router
