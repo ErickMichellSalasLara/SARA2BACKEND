@@ -1,13 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+import csv
+import io
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from database import get_db
-from typing import Optional
-import openpyxl
-from fpdf import FPDF
-import csv
-import os
-import io
 
 router = APIRouter()
 
