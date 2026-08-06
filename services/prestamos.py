@@ -6,10 +6,10 @@ from database import get_db
 
 router = APIRouter()
 
-class PrestamoCreate(BaseModel):
-    matricula: str
-    material: str
-    codigo: str
+class LoanCreate(BaseModel):
+    user_id: int
+    material_id: int
+    registered_by: int = 1
 
 # ---------------------------------------------------------
 # CREATE (Insertar préstamo)
