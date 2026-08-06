@@ -1,18 +1,49 @@
 import os
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Magia de entorno: Usa la BD local en tu PC, pero usará la de Railway en la nube
-URL_BASE_DATOS = os.getenv(
-    "DATABASE_URL",
-    "mysql+pymysql://root:MLRKGSdQsngwHusQylWxpqYzYDiksbXm@altaria.proxy.rlwy.net:21920/railway"
+from core.config import DATABASE_TIMEZONE
+
+
+def _normalize_database_url(raw_url: str) -> str:
+    raw_url = raw_url.strip()
+    if raw_url.startswith("mysql://"):
+        return raw_url.replace("mysql://", "mysql+pymysql://", 1)
+    return raw_url
+
+
+raw_database_url = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("MYSQL_URL")
+    or "mysql+pymysql://root:@127.0.0.1:3306/sara_db"
 )
+DATABASE_URL = _normalize_database_url(raw_database_url)
+database_url = make_url(DATABASE_URL)
 
-engine = create_engine(URL_BASE_DATOS)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine_options = {
+    "pool_pre_ping": True,
+    "pool_recycle": 280,
+    "future": True,
+}
+
+if database_url.drivername.startswith("mysql"):
+    engine_options["connect_args"] = {
+        "charset": "utf8mb4",
+        "init_command": f"SET time_zone = '{DATABASE_TIMEZONE}'",
+    }
+
+engine = create_engine(DATABASE_URL, **engine_options)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+    future=True,
+)
 Base = declarative_base()
 
-# Esta función es la que usarán TODOS tus archivos para pedir datos
+
 def get_db():
     db = SessionLocal()
     try:
