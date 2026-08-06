@@ -1,0 +1,20 @@
+S.A.R.A. - Validación de archivos corregidos
+Fecha UTC: 2026-08-06 14:47:38
+
+[1/7] Python: compilación sintáctica
+OK
+[2/7] FastAPI, JWT y hashes de cuentas demo
+OK: 35 rutas registradas
+[3/7] Configuración segura de producción y DTO
+OK
+[4/7] Estructura SQL y congruencia institucional
+OK
+[5/7] ESLint del frontend
+OK
+[6/7] Parseo JS/JSX e importaciones relativas
+OK: 78 archivos y 214 importaciones
+[7/7] Búsqueda de secretos, conflictos y datos antiguos
+OK
+
+Resultado: validaciones estáticas y pruebas básicas completadas correctamente.
+No se ejecutó integración real contra MySQL ni build Vite nativo en este contenedor.
