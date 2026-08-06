@@ -1,45 +1,37 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from pydantic import BaseModel
 from database import get_db
 
 router = APIRouter()
 
-class AuditoriaCreate(BaseModel):
-    admin: str
+class AuditCreate(BaseModel):
+    actor_user_id: int
     action: str
     module: str
-    record: str
+    record_label: str
 
-@router.get("/historial")
-async def obtener_historial(db: Session = Depends(get_db)):
-    try:
-        # Consultamos la base de datos real usando la vista preparada
-        query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
-        resultado = db.execute(query).mappings().all()
-        return {"auditoria": resultado}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+# Insertar registro de auditoría
 @router.post("/registrar")
-async def registrar_auditoria(auditoria: AuditoriaCreate, db: Session = Depends(get_db)):
-    try:
-        # Insertamos el nuevo registro en la base de datos real
-        query = text("""
-                     INSERT INTO audit_logs (actor_user_id, action, module, record_label, ip_address)
-                     VALUES (:actor, :action, :module, :record, :ip)
-                     """)
-        # Nota: Ponemos actor_user_id = 1 (Admin demo) de forma temporal hasta que conectes el login real
-        db.execute(query, {
-            "actor": 1,
-            "action": auditoria.action,
-            "module": auditoria.module,
-            "record": auditoria.record,
-            "ip": "127.0.0.1"
-        })
-        db.commit()
-        return {"mensaje": "Registro exitoso en base de datos"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+def registrar_auditoria(audit: AuditCreate, db: Session = Depends(get_db)):
+    query = text("""
+                 INSERT INTO audit_logs (actor_user_id, action, module, record_label, occurred_at)
+                 VALUES (:actor_user_id, :action, :module, :record_label, NOW())
+                 """)
+    db.execute(query, {
+        "actor_user_id": audit.actor_user_id,
+        "action": audit.action,
+        "module": audit.module,
+        "record_label": audit.record_label
+    })
+    db.commit()
+    return {"mensaje": "Registro de auditoría guardado"}
+
+# DELETE (Mantenimiento de logs antiguos)
+@router.delete("/limpiar")
+def limpiar_auditoria(fecha_limite: str = "2026-01-01", db: Session = Depends(get_db)):
+    query = text("DELETE FROM audit_logs WHERE occurred_at < :fecha")
+    db.execute(query, {"fecha": fecha_limite})
+    db.commit()
+    return {"mensaje": f"Registros de auditoría anteriores a {fecha_limite} eliminados"}

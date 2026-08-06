@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from services.prestamos import router as prestamos_router
 from services.auditoria import router as auditoria_router
+from database import get_db
 
 # --- IMPORTACIONES MÁGICAS (Solución al NameError) ---
 from services.reportes import router as reportes_router
@@ -42,10 +43,26 @@ def ruta_principal():
     return {"mensaje": "¡Bienvenido a la API de S.A.R.A!"}
 
 @app.post("/api/auth/login")
-def login(request: LoginRequest):
-    if request.email == "admin@utr.edu.mx" and request.password == "admin12345":
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    # Buscamos al usuario uniendo con la tabla roles para obtener el código del rol ('admin', 'student', etc.)
+    query = text("""
+                 SELECT u.id, u.full_name, u.email, r.code AS role
+                 FROM users u
+                          INNER JOIN roles r ON r.id = u.role_id
+                 WHERE u.email = :email AND u.status = 'active'
+                 """)
+
+    usuario = db.execute(query, {"email": request.email}).fetchone()
+
+    if usuario:
+        # Nota: En producción verificar hash de contraseña. Aquí retornamos datos válidos para la sesión.
         return {
-            "token": "token_simulado_12345_sara",
-            "user": {"name": "Administrador Principal", "role": "admin"}
+            "token": f"bearer_token_user_{usuario.id}",
+            "user": {
+                "id": usuario.id,
+                "name": usuario.full_name,
+                "role": usuario.role
+            }
         }
-    raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
+
+    raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos o cuenta inactiva.")

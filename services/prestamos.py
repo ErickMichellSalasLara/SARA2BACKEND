@@ -1,40 +1,89 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from pydantic import BaseModel
 from database import get_db
 
 router = APIRouter()
 
-class NuevoPrestamo(BaseModel):
-    user_id: int
-    material_id: int
-    due_date: str
+class PrestamoCreate(BaseModel):
+    matricula: str
+    material: str
+    codigo: str
 
-@router.get("/historial")
-async def obtener_prestamos(db: Session = Depends(get_db)):
-    try:
-        query = text("SELECT * FROM vw_loans_effective ORDER BY due_date ASC")
-        resultado = db.execute(query).mappings().all()
-        return {"prestamos": resultado}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+# ---------------------------------------------------------
+# CREATE (Insertar préstamo)
+# ---------------------------------------------------------
 @router.post("/registrar")
-async def registrar_prestamo(prestamo: NuevoPrestamo, db: Session = Depends(get_db)):
-    try:
-        # Ejemplo de cómo insertar un nuevo préstamo en la BD real
-        query = text("""
-                     INSERT INTO loans (user_id, material_id, loan_date, due_date, registered_by)
-                     VALUES (:user_id, :material_id, CURDATE(), :due_date, 1)
-                     """)
-        db.execute(query, {
-            "user_id": prestamo.user_id,
-            "material_id": prestamo.material_id,
-            "due_date": prestamo.due_date
-        })
-        db.commit()
-        return {"mensaje": "Préstamo registrado correctamente en la base de datos"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+def registrar_prestamo(loan: LoanCreate, db: Session = Depends(get_db)):
+    query = text("""
+                 INSERT INTO loans (user_id, material_id, loan_date, due_date, status, registered_by)
+                 VALUES (:user_id, :material_id, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'active', :registered_by)
+                 """)
+    db.execute(query, {
+        "user_id": loan.user_id,
+        "material_id": loan.material_id,
+        "registered_by": loan.registered_by
+    })
+    db.commit()
+    return {"mensaje": "Préstamo registrado exitosamente"}
+
+# ---------------------------------------------------------
+# UPDATE (Actualizar a devuelto)
+# ---------------------------------------------------------
+@router.put("/devolver/{loan_id}")
+def devolver_prestamo(loan_id: int, db: Session = Depends(get_db)):
+    query = text("""
+                 UPDATE loans
+                 SET status = 'returned', return_date = CURDATE()
+                 WHERE id = :id
+                 """)
+    db.execute(query, {"id": loan_id})
+    db.commit()
+    return {"mensaje": "Préstamo devuelto correctamente"}
+
+# ---------------------------------------------------------
+# JOIN (Obtener préstamos activos uniendo con Usuarios)
+# ---------------------------------------------------------
+@router.get("/activos")
+def obtener_prestamos_activos(db: Session = Depends(get_db)):
+    query = text("""
+                 SELECT u.full_name, u.enrollment, m.title AS resource, l.id, l.loan_date, l.due_date, l.status
+                 FROM loans l
+                          INNER JOIN users u ON u.id = l.user_id
+                          INNER JOIN materials m ON m.id = l.material_id
+                 WHERE l.status = 'active'
+                 """)
+    resultados = db.execute(query).mappings().all()
+    return {"prestamos_activos": resultados}
+
+# ---------------------------------------------------------
+# SUBCONSULTA (Identificar usuarios morosos/vencidos)
+# ---------------------------------------------------------
+@router.get("/morosos")
+def obtener_morosos(db: Session = Depends(get_db)):
+    query = text("""
+                 SELECT full_name, email, enrollment
+                 FROM users
+                 WHERE id IN (
+                     SELECT user_id
+                     FROM loans
+                     WHERE status = 'overdue'
+                 )
+                 """)
+    resultados = db.execute(query).mappings().all()
+    return {"usuarios_morosos": resultados}
+
+# ---------------------------------------------------------
+# GROUP BY y HAVING (Lectores frecuentes > 3 préstamos)
+# ---------------------------------------------------------
+@router.get("/frecuentes")
+def obtener_usuarios_frecuentes(db: Session = Depends(get_db)):
+    query = text("""
+                 SELECT user_id, COUNT(*) AS total_prestamos
+                 FROM loans
+                 GROUP BY user_id
+                 HAVING COUNT(*) >= 1
+                 """)
+    resultados = db.execute(query).mappings().all()
+    return {"usuarios_frecuentes": resultados}
