@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db
+from typing import Optional
 import openpyxl
 from fpdf import FPDF
 import csv
@@ -11,24 +12,35 @@ import os
 router = APIRouter()
 
 # ---------------------------------------------------------
-# 1. Exportar a CSV (Actualizado para el frontend)
+# 1. Exportar a CSV (Generado en Memoria RAM)
 # ---------------------------------------------------------
 @router.get("/accesses/csv")
 async def exportar_csv(inicio: Optional[str] = None, fin: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        # Por ahora leeremos todo, luego podemos usar las variables 'inicio' y 'fin' para filtrar
         query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
         registros = db.execute(query).mappings().all()
 
-        file_path = "reporte_auditoria.csv"
+        # Creamos un archivo "virtual" en la memoria RAM
+        stream = io.StringIO()
+        writer = csv.writer(stream)
 
-        with open(file_path, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerow(["ID", "Administrador", "Acción", "Módulo", "Registro", "Fecha"])
-            for reg in registros:
-                writer.writerow([reg["id"], reg["administrator"], reg["action"], reg["module"], reg["record_label"], str(reg["occurred_at"])])
+        # Escribimos los encabezados y los datos
+        writer.writerow(["ID", "Administrador", "Acción", "Módulo", "Registro", "Fecha"])
+        for reg in registros:
+            writer.writerow([
+                reg["id"],
+                reg["administrator"],
+                reg["action"],
+                reg["module"],
+                reg["record_label"],
+                str(reg["occurred_at"])
+            ])
 
-        return FileResponse(file_path, filename="Reporte_SARA.csv")
+        # Preparamos la respuesta para que el navegador inicie la descarga
+        response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
+        response.headers["Content-Disposition"] = "attachment; filename=Reporte_SARA.csv"
+        return response
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
