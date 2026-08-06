@@ -11,33 +11,22 @@ import os
 router = APIRouter()
 
 # ---------------------------------------------------------
-# 1. Exportar a CSV
+# 1. Exportar a CSV (Actualizado para el frontend)
 # ---------------------------------------------------------
-@router.get("/exportar/csv")
-async def exportar_csv(db: Session = Depends(get_db)):
+@router.get("/accesses/csv")
+async def exportar_csv(inicio: Optional[str] = None, fin: Optional[str] = None, db: Session = Depends(get_db)):
     try:
+        # Por ahora leeremos todo, luego podemos usar las variables 'inicio' y 'fin' para filtrar
         query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
         registros = db.execute(query).mappings().all()
 
         file_path = "reporte_auditoria.csv"
 
-        # Abrimos el archivo en modo escritura ('w')
         with open(file_path, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-
-            # Escribimos los encabezados de las columnas
             writer.writerow(["ID", "Administrador", "Acción", "Módulo", "Registro", "Fecha"])
-
-            # Escribimos fila por fila
             for reg in registros:
-                writer.writerow([
-                    reg["id"],
-                    reg["administrator"],
-                    reg["action"],
-                    reg["module"],
-                    reg["record_label"],
-                    str(reg["occurred_at"])
-                ])
+                writer.writerow([reg["id"], reg["administrator"], reg["action"], reg["module"], reg["record_label"], str(reg["occurred_at"])])
 
         return FileResponse(file_path, filename="Reporte_SARA.csv")
     except Exception as e:

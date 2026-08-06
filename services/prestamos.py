@@ -11,7 +11,7 @@ class NuevoPrestamo(BaseModel):
     material_id: int
     due_date: str
 
-@router.get("/activos")
+@router.get("/historial")
 async def obtener_prestamos(db: Session = Depends(get_db)):
     try:
         query = text("SELECT * FROM vw_loans_effective ORDER BY due_date ASC")
