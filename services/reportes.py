@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db
@@ -8,6 +7,7 @@ import openpyxl
 from fpdf import FPDF
 import csv
 import os
+import io
 
 router = APIRouter()
 
@@ -45,60 +45,17 @@ async def exportar_csv(inicio: Optional[str] = None, fin: Optional[str] = None, 
         raise HTTPException(status_code=500, detail=str(e))
 
 # ---------------------------------------------------------
-# 2. Exportar a Excel
+# 2. Exportar a Excel (Esqueleto para evitar 404)
 # ---------------------------------------------------------
-@router.get("/exportar/excel")
-async def exportar_excel(db: Session = Depends(get_db)):
-    try:
-        query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
-        registros = db.execute(query).mappings().all()
-
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Reporte SARA"
-
-        ws.append(["ID", "Administrador", "Acción", "Módulo", "Registro", "Fecha"])
-
-        for reg in registros:
-            ws.append([
-                reg["id"],
-                reg["administrator"],
-                reg["action"],
-                reg["module"],
-                reg["record_label"],
-                str(reg["occurred_at"])
-            ])
-
-        file_path = "reporte_auditoria.xlsx"
-        wb.save(file_path)
-        return FileResponse(file_path, filename="Reporte_SARA.xlsx")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/accesses/excel")
+async def exportar_excel(inicio: Optional[str] = None, fin: Optional[str] = None, db: Session = Depends(get_db)):
+    # Por ahora lanzamos un error 501 (No implementado) en vez de un 404
+    raise HTTPException(status_code=501, detail="La exportación a Excel aún está en construcción.")
 
 # ---------------------------------------------------------
-# 3. Exportar a PDF
+# 3. Exportar a PDF (Esqueleto para evitar 404)
 # ---------------------------------------------------------
-@router.get("/exportar/pdf")
-async def exportar_pdf(db: Session = Depends(get_db)):
-    try:
-        # Para el PDF limitamos a 50 registros para que no sea un documento infinito
-        query = text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC LIMIT 50")
-        registros = db.execute(query).mappings().all()
-
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 10, "S.A.R.A. - Reporte de Auditoría", ln=True, align="C")
-
-        pdf.set_font("Arial", size=10)
-        pdf.ln(10)
-
-        for reg in registros:
-            texto = f"[{reg['occurred_at']}] {reg['administrator']} -> {reg['action']} en {reg['module']}"
-            pdf.cell(0, 10, texto, ln=True)
-
-        file_path = "reporte_auditoria.pdf"
-        pdf.output(file_path)
-        return FileResponse(file_path, filename="Reporte_SARA.pdf")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/accesses/pdf")
+async def exportar_pdf(inicio: Optional[str] = None, fin: Optional[str] = None, db: Session = Depends(get_db)):
+    # Por ahora lanzamos un error 501 (No implementado) en vez de un 404
+    raise HTTPException(status_code=501, detail="La exportación a PDF aún está en construcción.")
