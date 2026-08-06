@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import os
+import json
+import httpx
 from datetime import date, datetime, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
+
+# Importaciones para Google Calendar
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 from core.serialization import rows_to_dicts
 from database import get_db
@@ -14,6 +21,10 @@ from schemas.dto import ReservationCreate
 
 router = APIRouter(prefix="/reservations", tags=["Reservas"])
 calendar_router = APIRouter(prefix="/calendario", tags=["Calendario"])
+
+# --- CONSTANTES DE GOOGLE CALENDAR ---
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+CALENDAR_ID = 'c_0897fb421b1c7095121077b97e2bba9b8aa9c5d1b4775f68493ffa5d2bfea268@group.calendar.google.com'
 
 ACTIVE_STATUSES = ("pending", "confirmed", "active")
 STATUS_LABELS = {
@@ -53,8 +64,8 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             detail="No puedes crear una reserva en una fecha pasada.",
         )
     if (
-        payload.reservation_date == current["today"]
-        and payload.start_time <= current["current_time"]
+            payload.reservation_date == current["today"]
+            and payload.start_time <= current["current_time"]
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -94,8 +105,8 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             detail="No hay servicio el día seleccionado.",
         )
     if (
-        payload.start_time < schedule["opening_time"]
-        or payload.end_time > schedule["closing_time"]
+            payload.start_time < schedule["opening_time"]
+            or payload.end_time > schedule["closing_time"]
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -119,7 +130,7 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             """
             SELECT id, name, capacity, operational_status, is_active
             FROM cubicles WHERE id = :cubicle_id
-            FOR UPDATE
+                FOR UPDATE
             """
         ),
         {"cubicle_id": payload.cubicle_id},
@@ -206,18 +217,21 @@ def _reservation_rows(db: Session):
                 r.purpose,
                 r.number_of_people
             FROM reservations r
-            JOIN users u ON u.id = r.user_id
-            JOIN cubicles c ON c.id = r.cubicle_id
+                JOIN users u ON u.id = r.user_id
+                JOIN cubicles c ON c.id = r.cubicle_id
             ORDER BY r.reservation_date DESC, r.start_time DESC
             """
         )
     ).mappings().all()
 
 
+# ==========================================
+# RUTAS DE RESERVAS (CRUD SQL)
+# ==========================================
 @router.get("")
 def list_reservations(
-    _: dict = Depends(require_admin),
-    db: Session = Depends(get_db),
+        _: dict = Depends(require_admin),
+        db: Session = Depends(get_db),
 ):
     reservations = []
     for row in rows_to_dicts(_reservation_rows(db)):
@@ -233,9 +247,9 @@ def list_reservations(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_reservation(
-    payload: ReservationCreate,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+        payload: ReservationCreate,
+        current_user: dict = Depends(get_current_user),
+        db: Session = Depends(get_db),
 ):
     target_user_id = payload.user_id if current_user["role"] == "admin" else current_user["id"]
     if target_user_id is None:
@@ -251,9 +265,9 @@ def create_reservation(
                     user_id, cubicle_id, reservation_date, start_time, end_time,
                     status, purpose, number_of_people, source, created_by
                 ) VALUES (
-                    :user_id, :cubicle_id, :reservation_date, :start_time, :end_time,
-                    'confirmed', :purpose, :number_of_people, :source, :created_by
-                )
+                             :user_id, :cubicle_id, :reservation_date, :start_time, :end_time,
+                             'confirmed', :purpose, :number_of_people, :source, :created_by
+                         )
                 """
             ),
             {
@@ -298,9 +312,9 @@ def create_reservation(
 
 @router.patch("/{reservation_id}/cancel")
 def cancel_reservation(
-    reservation_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+        reservation_id: int,
+        current_user: dict = Depends(get_current_user),
+        db: Session = Depends(get_db),
 ):
     row = db.execute(
         text("SELECT user_id, status FROM reservations WHERE id = :id"),
@@ -330,9 +344,9 @@ def cancel_reservation(
             INSERT INTO audit_logs (
                 actor_user_id, action, module, entity_type, entity_id, record_label
             ) VALUES (
-                :actor, 'Canceló una reserva', 'Reservas',
-                'reservation', :entity_id, :label
-            )
+                         :actor, 'Canceló una reserva', 'Reservas',
+                         'reservation', :entity_id, :label
+                     )
             """
         ),
         {
@@ -345,47 +359,57 @@ def cancel_reservation(
     return {"message": "Reserva cancelada correctamente."}
 
 
+# ==========================================
+# RUTAS DEL CALENDARIO (APIs Externas y Vistas)
+# ==========================================
 @calendar_router.get("/dias-festivos")
-def holidays(
-    year: int = Query(default_factory=lambda: date.today().year, ge=2000, le=2100),
-    db: Session = Depends(get_db),
+async def holidays(
+        year: int = Query(default_factory=lambda: date.today().year, ge=2000, le=2100)
 ):
-    rows = db.execute(
-        text(
-            """
-            SELECT holiday_date AS fecha, name AS motivo, is_closed
-            FROM holidays
-            WHERE YEAR(holiday_date) = :year
-            ORDER BY holiday_date
-            """
-        ),
-        {"year": year},
-    ).mappings().all()
-    return {"festivos": rows_to_dicts(rows)}
+    """
+    Obtiene los días festivos en México usando la API externa Nager.Date.
+    """
+    url_api_externa = f"https://date.nager.at/api/v3/PublicHolidays/{year}/MX"
+    async with httpx.AsyncClient() as client:
+        respuesta = await client.get(url_api_externa)
+        if respuesta.status_code == 200:
+            datos = respuesta.json()
+            festivos_limpios = [{"fecha": dia["date"], "motivo": dia["localName"]} for dia in datos]
+            return {"festivos": festivos_limpios}
+        raise HTTPException(status_code=respuesta.status_code, detail="Error conectando con Nager.Date.")
 
 
 @calendar_router.get("/eventos")
-def calendar_events(
-    _: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    rows = db.execute(
-        text(
-            """
-            SELECT event_id AS id, title,
-                   start_datetime AS start, end_datetime AS end, status
-            FROM vw_calendar_events
-            ORDER BY start_datetime
-            """
-        )
-    ).mappings().all()
-    return {"eventos": rows_to_dicts(rows)}
+def calendar_events():
+    """
+    Se conecta a Google Calendar para obtener los próximos eventos
+    usando credenciales de variables de entorno o archivo local.
+    """
+    try:
+        google_creds_env = os.getenv("GOOGLE_CREDENTIALS")
+
+        if google_creds_env:
+            creds_dict = json.loads(google_creds_env)
+            creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        else:
+            creds = service_account.Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+
+        servicio = build('calendar', 'v3', credentials=creds)
+        eventos_resultado = servicio.events().list(
+            calendarId=CALENDAR_ID, maxResults=10, singleEvents=True, orderBy='startTime'
+        ).execute()
+
+        eventos = eventos_resultado.get('items', [])
+        return {"mensaje": "Conexión exitosa", "eventos": eventos}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error conectando con Google Calendar: {str(e)}")
 
 
 @calendar_router.get("/estado-cubiculos")
 def calendar_cubicles(
-    _: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+        _: dict = Depends(get_current_user),
+        db: Session = Depends(get_db),
 ):
     rows = db.execute(text("SELECT * FROM vw_cubicle_status ORDER BY id")).mappings().all()
     return {"cubiculos": rows_to_dicts(rows)}
@@ -393,7 +417,7 @@ def calendar_cubicles(
 
 @calendar_router.get("/historial-bd")
 def calendar_history(
-    _: dict = Depends(require_admin),
-    db: Session = Depends(get_db),
+        _: dict = Depends(require_admin),
+        db: Session = Depends(get_db),
 ):
     return {"reservas_bd": rows_to_dicts(_reservation_rows(db))}
