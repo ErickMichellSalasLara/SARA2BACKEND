@@ -8,7 +8,7 @@ from dependencies import require_admin
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
-@router.get("")
+@router.get("/summary")
 def dashboard_summary(
     _: dict = Depends(require_admin),
     db: Session = Depends(get_db),
