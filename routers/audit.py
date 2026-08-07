@@ -18,11 +18,11 @@ def get_audit_history(db: Session = Depends(get_db)):
                      a.action AS accion,
                      a.module AS modulo,
                      a.record_label AS registro,
-                     a.created_at AS fecha,
+                     a.occurred_at AS fecha,
                      a.ip_address AS direccion_ip
                  FROM audit_logs a
                           LEFT JOIN users u ON a.actor_user_id = u.id
-                 ORDER BY a.created_at DESC
+                 ORDER BY a.occurred_at DESC
                      LIMIT 100
                  """)
 
