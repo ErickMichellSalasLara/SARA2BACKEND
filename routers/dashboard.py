@@ -71,20 +71,26 @@ def dashboard_summary(
 
     print("6")
     affluence_rows = db.execute(
-        text(
-            """
-            SELECT
-                CONCAT(LPAD(HOUR(occurred_at),2,'0'), ':00') AS label,
-                COUNT(*) AS value
-            FROM access_records
-            WHERE DATE(occurred_at)=CURDATE()
-              AND movement='entry'
-              AND result='granted'
-            GROUP BY HOUR(occurred_at)
-            ORDER BY HOUR(occurred_at)
-            """
-        )
+        text("""
+             SELECT
+                 HOUR(occurred_at) AS hour,
+                 COUNT(*) AS value
+             FROM access_records
+             WHERE DATE(occurred_at)=CURDATE()
+               AND movement='entry'
+               AND result='granted'
+             GROUP BY HOUR(occurred_at)
+             ORDER BY HOUR(occurred_at)
+             """)
     ).mappings().all()
+
+    affluence = [
+        {
+        "label": f"{row['hour']:02d}:00",
+        "value": row["value"]
+        }
+        for row in affluence_rows
+    ]
 
     print("7")
     activities = db.execute(
@@ -159,7 +165,7 @@ def dashboard_summary(
                 "icon": "book",
             },
         ],
-        "affluence": [dict(row) for row in affluence_rows],
+        "affluence": affluence,
         "occupancy": occupancy,
         "activities": [dict(row) for row in activities],
         "alerts": [dict(row) for row in alerts],
