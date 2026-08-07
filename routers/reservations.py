@@ -106,12 +106,12 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             detail="No hay servicio el día seleccionado.",
         )
 
-    schedule["opening_time"] = td_to_time(schedule["opening_time"])
-    schedule["closing_time"] = td_to_time(schedule["closing_time"])
+    opening_time = td_to_time(schedule["opening_time"])
+    closing_time = td_to_time(schedule["closing_time"])
 
     if (
-        payload.start_time < schedule["opening_time"]
-        or payload.end_time > schedule["closing_time"]
+        payload.start_time < opening_time
+        or payload.end_time > closing_time
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
