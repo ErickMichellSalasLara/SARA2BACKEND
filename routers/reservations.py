@@ -105,6 +105,10 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No hay servicio el día seleccionado.",
         )
+
+    schedule["opening_time"] = td_to_time(schedule["opening_time"])
+    schedule["closing_time"] = td_to_time(schedule["closing_time"])
+
     if (
         payload.start_time < schedule["opening_time"]
         or payload.end_time > schedule["closing_time"]
@@ -114,8 +118,7 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             detail="La reserva está fuera del horario de servicio de ese día.",
         )
 
-    schedule["opening_time"] = td_to_time(schedule["opening_time"])
-    schedule["closing_time"] = td_to_time(schedule["closing_time"])
+
 
     is_holiday = db.execute(
         text(
