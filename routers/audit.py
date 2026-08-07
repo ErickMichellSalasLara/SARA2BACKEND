@@ -65,3 +65,15 @@ def register_audit(
     )
     db.commit()
     return {"message": "Registro de auditoría creado.", "id": result.lastrowid}
+
+@router.delete("/depurar", status_code=status.HTTP_200_OK)
+def depurar_auditoria(
+        current_user: dict = Depends(require_admin),
+        db: Session = Depends(get_db),
+):
+    # Operación DELETE directa a la base de datos
+    result = db.execute(
+        text("DELETE FROM audit_logs WHERE occurred_at < DATE_SUB(NOW(), INTERVAL 1 YEAR)")
+    )
+    db.commit()
+    return {"message": f"Se eliminaron {result.rowcount} registros de auditoría antiguos."}

@@ -76,6 +76,7 @@ def dashboard_summary(
                AND movement='entry'
                AND result='granted'
              GROUP BY HOUR(occurred_at)
+             HAVING COUNT(*) > 0
              ORDER BY HOUR(occurred_at)
              """)
     ).mappings().all()
