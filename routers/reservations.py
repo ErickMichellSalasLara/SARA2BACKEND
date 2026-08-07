@@ -62,6 +62,11 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             detail="La hora inicial debe ser posterior a la hora actual.",
         )
 
+    print(type(schedule["opening_time"]))
+    print(schedule["closing_time"])
+    print(schedule["opening_time"])
+    print(type(schedule["closing_time"]))
+
     if payload.start_time < opening or payload.end_time > closing:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
