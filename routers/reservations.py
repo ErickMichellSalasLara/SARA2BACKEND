@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
@@ -25,6 +25,16 @@ STATUS_LABELS = {
     "expired": "Expirado",
     "no_show": "No utilizado",
 }
+
+def td_to_time(value):
+    if isinstance(value, timedelta):
+        total = int(value.total_seconds())
+        return time(
+            total // 3600,
+            (total % 3600) // 60,
+            total % 60,
+            )
+    return value
 
 
 def _time_to_minutes(value: time) -> int:
@@ -90,11 +100,6 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
         {"reservation_date": payload.reservation_date},
     ).mappings().first()
 
-    print(type(schedule["opening_time"]))
-    print(schedule["closing_time"])
-    print(schedule["opening_time"])
-    print(type(schedule["closing_time"]))
-
     if not schedule or not schedule["is_open"]:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -108,6 +113,9 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="La reserva está fuera del horario de servicio de ese día.",
         )
+
+    schedule["opening_time"] = td_to_time(schedule["opening_time"])
+    schedule["closing_time"] = td_to_time(schedule["closing_time"])
 
     is_holiday = db.execute(
         text(
