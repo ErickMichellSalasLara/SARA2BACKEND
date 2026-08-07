@@ -45,16 +45,17 @@ def _validate_reservation(db: Session, payload: ReservationCreate, user_id: int)
     max_minutes = int(_get_setting(db, "maximum_reservation_minutes", "90"))
 
     current = db.execute(
-        text("SELECT CURDATE() AS today, CURTIME() AS current_time")
+        text("SELECT CURDATE() AS today, CURTIME() AS hora_actual")
     ).mappings().one()
+
     if payload.reservation_date < current["today"]:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="No puedes crear una reserva en una fecha pasada.",
         )
     if (
-        payload.reservation_date == current["today"]
-        and payload.start_time <= current["current_time"]
+            payload.reservation_date == current["today"]
+            and payload.start_time <= current["hora_actual"]
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
