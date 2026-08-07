@@ -20,16 +20,19 @@ def dashboard_summary(
             """
             SELECT COUNT(*)
             FROM (
-                SELECT ar.user_id,
-                       SUBSTRING_INDEX(
-                           GROUP_CONCAT(ar.movement ORDER BY ar.occurred_at DESC),
-                           ',', 1
-                       ) AS last_movement
-                FROM access_records ar
-                WHERE ar.user_id IS NOT NULL AND ar.result = 'granted'
-                GROUP BY ar.user_id, occurred_at
-            ) latest
-            WHERE latest.last_movement = 'entry'
+                     SELECT ar.user_id, ar.movement AS last_movement
+                     FROM access_records ar
+                              INNER JOIN (
+                         SELECT user_id, MAX(occurred_at) AS last_time
+                         FROM access_records
+                         WHERE user_id IS NOT NULL
+                           AND result = 'granted'
+                         GROUP BY user_id
+                     ) latest
+                    ON latest.user_id = ar.user_id
+                    AND latest.last_time = ar.occurred_at
+                 ) t
+            WHERE t.last_movement = 'entry';
             """
         )
     ).scalar_one()
