@@ -11,8 +11,8 @@ router = APIRouter(prefix="/accesos", tags=["Accesos"])
 
 @router.get("/historial")
 def access_history(
-    _: dict = Depends(require_admin),
-    db: Session = Depends(get_db),
+        _: dict = Depends(require_admin),
+        db: Session = Depends(get_db),
 ):
     rows = db.execute(
         text("SELECT * FROM vw_access_records ORDER BY occurred_at DESC")
@@ -35,3 +35,45 @@ def access_history(
         )
 
     return {"accesos": records}
+
+
+@router.get("/estadisticas")
+def access_statistics(
+        _: dict = Depends(require_admin),
+        db: Session = Depends(get_db),
+):
+    # 1. Usuarios dentro ahora (último movimiento fue entrada)
+    inside_now = db.execute(
+        text(
+            """
+            SELECT COUNT(*)
+            FROM (
+                     SELECT ar.user_id,
+                            SUBSTRING_INDEX(
+                                    GROUP_CONCAT(ar.movement ORDER BY ar.occurred_at DESC),
+                                    ',', 1
+                            ) AS last_movement
+                     FROM access_records ar
+                     WHERE ar.user_id IS NOT NULL AND ar.result = 'granted'
+                     GROUP BY ar.user_id
+                 ) latest
+            WHERE latest.last_movement = 'entry'
+            """
+        )
+    ).scalar_one_or_none() or 0
+
+    # 2. Total de accesos hoy
+    accesses_today = db.execute(
+        text("SELECT COUNT(*) FROM access_records WHERE DATE(occurred_at) = CURDATE()")
+    ).scalar_one_or_none() or 0
+
+    # 3. Accesos denegados hoy
+    denied_today = db.execute(
+        text("SELECT COUNT(*) FROM access_records WHERE DATE(occurred_at) = CURDATE() AND result = 'denied'")
+    ).scalar_one_or_none() or 0
+
+    return {
+        "dentroAhora": int(inside_now),
+        "accesosHoy": int(accesses_today),
+        "accesosDenegados": int(denied_today)
+    }

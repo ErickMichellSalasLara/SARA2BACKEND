@@ -11,14 +11,35 @@ router = APIRouter(prefix="/auditoria", tags=["Auditoría"])
 
 
 @router.get("/historial")
-def audit_history(
-    _: dict = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    rows = db.execute(
-        text("SELECT * FROM vw_audit_records ORDER BY occurred_at DESC")
-    ).mappings().all()
-    return {"auditoria": rows_to_dicts(rows)}
+def get_audit_history(db: Session = Depends(get_db)):
+    query = text("""
+                 SELECT
+                     u.full_name AS administrador,
+                     a.action AS accion,
+                     a.module AS modulo,
+                     a.record_label AS registro,
+                     a.created_at AS fecha,
+                     a.ip_address AS direccion_ip
+                 FROM audit_logs a
+                          LEFT JOIN users u ON a.actor_user_id = u.id
+                 ORDER BY a.created_at DESC
+                     LIMIT 100
+                 """)
+
+    rows = db.execute(query).mappings().all()
+
+    # Formatear las fechas para que no rompan el JSON en React
+    resultados = []
+    for row in rows:
+        dict_row = dict(row)
+        if dict_row["fecha"]:
+            dict_row["fecha"] = dict_row["fecha"].strftime("%Y-%m-%d %H:%M:%S")
+        # Por si hay campos nulos, mandar un string vacío
+        dict_row["registro"] = dict_row["registro"] or "N/A"
+        dict_row["direccion_ip"] = dict_row["direccion_ip"] or "Desconocida"
+        resultados.append(dict_row)
+
+    return {"auditoria": resultados}
 
 
 @router.post("/registrar", status_code=status.HTTP_201_CREATED)
