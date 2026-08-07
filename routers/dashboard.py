@@ -27,7 +27,7 @@ def dashboard_summary(
                        ) AS last_movement
                 FROM access_records ar
                 WHERE ar.user_id IS NOT NULL AND ar.result = 'granted'
-                GROUP BY ar.user_id, occured_at
+                GROUP BY ar.user_id, occurred_at
             ) latest
             WHERE latest.last_movement = 'entry'
             """
