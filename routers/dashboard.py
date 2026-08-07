@@ -14,7 +14,7 @@ def dashboard_summary(
     db: Session = Depends(get_db),
 ):
     database_today = db.execute(text("SELECT CURDATE()")).scalar_one()
-
+    print("1")
     inside_now = db.execute(
         text(
             """
@@ -36,14 +36,16 @@ def dashboard_summary(
             """
         )
     ).scalar_one()
-
+    print("2")
     accesses_today = db.execute(
         text("SELECT COUNT(*) FROM access_records WHERE DATE(occurred_at) = CURDATE()")
     ).scalar_one()
-
+    print("3")
     loans_active = db.execute(
         text("SELECT COUNT(*) FROM loans WHERE status IN ('active', 'renewed', 'overdue')")
     ).scalar_one()
+
+    print("4")
     loans_overdue = db.execute(
         text(
             """
@@ -54,6 +56,7 @@ def dashboard_summary(
         )
     ).scalar_one()
 
+    print("5")
     cubicle_rows = db.execute(
         text("SELECT status, COUNT(*) AS total FROM vw_cubicle_status GROUP BY status")
     ).mappings().all()
@@ -66,18 +69,24 @@ def dashboard_summary(
     unavailable = occupancy["occupied"] + occupancy["reserved"] + occupancy["maintenance"]
     total_cubicles = sum(occupancy.values())
 
+    print("6")
     affluence_rows = db.execute(
         text(
             """
-            SELECT DATE_FORMAT(occurred_at, '%H:00') AS label, COUNT(*) AS value
+            SELECT
+                CONCAT(LPAD(HOUR(occurred_at),2,'0'), ':00') AS label,
+                COUNT(*) AS value
             FROM access_records
-            WHERE DATE(occurred_at) = CURDATE() AND movement = 'entry' AND result = 'granted'
+            WHERE DATE(occurred_at)=CURDATE()
+              AND movement='entry'
+              AND result='granted'
             GROUP BY HOUR(occurred_at)
             ORDER BY HOUR(occurred_at)
             """
         )
     ).mappings().all()
 
+    print("7")
     activities = db.execute(
         text(
             """
@@ -97,6 +106,7 @@ def dashboard_summary(
         )
     ).mappings().all()
 
+    print("8")
     alerts = db.execute(
         text(
             """
